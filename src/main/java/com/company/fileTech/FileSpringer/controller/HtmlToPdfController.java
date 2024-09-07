@@ -1,8 +1,8 @@
+
 package com.company.fileTech.FileSpringer.controller;
 
-import com.company.fileTech.FileSpringer.service.DocxToPdfService;
+import com.company.fileTech.FileSpringer.service.HtmlToPdfService;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -10,23 +10,22 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping
-public class DocxToPdfController {
+public class HtmlToPdfController {
 
     private final Map<String, byte[]> fileStorage = new HashMap<>();
 
-
-    @Autowired
-    private DocxToPdfService docxToPdfService;
-    @PostMapping("/file/docxToPdf")
-    public ResponseEntity<Map<String, Object>> convertDocxToPdf(
+    @PostMapping("/file/htmlToPdf")
+    public ResponseEntity<Map<String, Object>> convertHtmlToPdf(
             @RequestParam("file") MultipartFile file,
             @RequestParam("targetFormat") String targetFormat,
             HttpServletRequest request) {
@@ -36,22 +35,24 @@ public class DocxToPdfController {
             long maxFileSizeInBytes = 5 * 1024 * 1024; // 5MB
             if (file.getSize() > maxFileSizeInBytes) {
                 Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("message", "File size exceeds the allowed limit of 5 MB");
+                errorResponse.put("message", "File size exceeds the allowed limit of 10 MB");
                 return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
             }
 
+            // Target format validation
             if (!"PDF".equalsIgnoreCase(targetFormat)) {
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("message", "Unsupported target format");
                 return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
             }
 
-            // Call service to convert DOCX to PDF
-            byte[] pdfBytes = docxToPdfService.convertDocxToPdf(file);
+            // Call the service to convert HTML to PDF
+            ByteArrayOutputStream pdfOutputStream = HtmlToPdfService.generatePDFFromHTML(file);
+            byte[] pdfBytes = pdfOutputStream.toByteArray();
 
             // Extract the original file name and use it for the PDF
             String originalFileName = file.getOriginalFilename();
-            if (originalFileName == null || !originalFileName.toLowerCase().endsWith(".docx")) {
+            if (originalFileName == null || !originalFileName.toLowerCase().endsWith(".html")) {
                 originalFileName = "converted";
             } else {
                 originalFileName = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
@@ -63,10 +64,10 @@ public class DocxToPdfController {
                     + ":" + request.getServerPort();
 
             // Generate complete download link
-            String downloadLink = baseUrl + "/download/" + pdfFileName;
+            String downloadLink = baseUrl + "/download/htmlToPdf/" + pdfFileName;
 
             // Get current creation time
-            String creationTime = java.time.LocalDateTime.now().toString();
+            String creationTime = LocalDateTime.now().toString();
 
             // Store PDF bytes in memory
             fileStorage.put(pdfFileName, pdfBytes);
@@ -78,17 +79,16 @@ public class DocxToPdfController {
             jsonResponse.put("pdf", downloadLink);
 
             return new ResponseEntity<>(jsonResponse, HttpStatus.OK);
-        } catch (Exception e) {
+        } catch (IOException e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("message", "Error during conversion: " + e.getMessage());
             return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-    @GetMapping("/download/docxToPdf/{fileName}")
+
+    @GetMapping("/download/htmlToPdf/{fileName}")
     public ResponseEntity<Resource> downloadFile(@PathVariable String fileName) {
         if (!fileStorage.containsKey(fileName)) {
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("message", "File not found: " + fileName);
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
 
@@ -101,13 +101,4 @@ public class DocxToPdfController {
 
         return new ResponseEntity<>(resource, headers, HttpStatus.OK);
     }
-
-    // Exception handler for MaxUploadSizeExceededException
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleMaxSizeException(MaxUploadSizeExceededException exc) {
-        Map<String, Object> errorResponse = new HashMap<>();
-        errorResponse.put("message", "File size exceeds the allowed limit of 5 MB");
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
-    }
-
 }
