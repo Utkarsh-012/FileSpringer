@@ -10,7 +10,7 @@
 <h1>Upload and Convert File</h1>
 <form action="file/docxToPdf" method="post" enctype="multipart/form-data">
     <input type="file" name="file" required />
-    <input type="text" name="targetFormat" value="pdf" />
+    <input type="hidden" name="targetFormat" value="pdf" />
     <button type="submit">Upload and Download</button>
 </form>
 </body>
